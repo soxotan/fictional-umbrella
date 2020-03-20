@@ -1,0 +1,139 @@
+function getMail(){
+  //検索条件はis:unread(未読メール全て)かつto:example@example.com(example@example.comへのメール)
+  var FindRule = 'is:unread to:example@example.com';
+  //指定した条件のメールを検索して最大20件取得 
+  var myThreads = GmailApp.search(FindRule, 0, 20); 
+  //メール情報を取得し配列に格納
+  var myMessages = GmailApp.getMessagesForThreads(myThreads);
+  for(var i in myMessages){
+    for(var j in myMessages[i]){
+      //未読か確認(検索はスレッド単位の未読しか確認しないため)
+      if(myMessages[i][j].isUnread()){
+	  	//日時の取得・整形
+    var strDate　=　Utilities.formatDate(myMessages[i][j].getDate(), "JST", "M/d (EEE) HH:mm:ss");
+	//差出人の取得
+    var strFrom　=　myMessages[i][j].getFrom();
+	//getnameより名前データの取得
+    var strName　=　getname(strFrom);
+	//件名の取得
+    var strSubject　=　myMessages[i][j].getSubject();
+	//本文の取得
+    var strMessage　=　myMessages[i][j].getPlainBody();
+      //転送の場合は引用を残す
+      if(strSubject.match(/^(Fw:|Fwd:).*$/)){
+        var BodyMessage=strMessage
+        }else{
+    //本文から引用返信部分を削除
+    var BodyMessage=strMessage.split('----- Original Message -----',1);
+    //BodyMessageを文字列に復元
+        BodyMessage=String(BodyMessage);
+        //---------------iPhoneメールの引用対応----------------
+        BodyMessage=BodyMessage.split(/(\n> |\n|\nOn )([RHS(令和)(平成)(昭和)]([0-9]){1,2}|([0-9]){4})(\/|年)([0-9]){1,2}(\/|月)([0-9]){1,2}/,1);
+        ///\n> ([RHS(令和)(平成)(昭和)]([0-9]){1,2}|([0-9]){4})(\/|年)([0-9]){1,2}(\/|月)([0-9]){1,2} (([0-9]){1,2}|(午(前|後)([0-9]){1,2})):([0-9]){1,2}、/
+        //---------------iPhone終わり------------------
+      }
+	  //Googleグループを使用していたため、説明部分の削除
+      BodyMessage=BodyMessage[0].split('\n-- \nこのメールは Google',1);
+    
+        
+        //差出人に関する処理
+        if(strName=="特例 先生"){
+          strFrom=strName;
+          strName="先生から";
+		  //不明な差出人は、差出人を表示しない
+        }else if(strName=="404"){
+          strName="";
+          strFrom="\n"+strFrom;
+        }else{
+		//差出人が帰ってきた場合は名字のみを表示
+          strFrom=strName+" さん";
+          strName=strName.split(" ",1)+"さんから";
+        }
+        //件名のグループ名削除
+        strSubject=strSubject.replace("[GOOGLE_GROUP_NAME] ","");
+        if(strSubject.length>15)strSubject="\n"+strSubject;
+        
+        //重要度判定
+      //件名頭にRe:が含まれている(ただの返信の場合)
+      if(strSubject.match(/^R(e|E):.*$/)){
+        var　importance = "ﾒｰﾘﾝｸﾞﾘｽﾄに返信が届きました。";
+		//返信用のApp名のトークン
+        var token="YOUR_TOKEN_1";
+        var notice="";
+		//返信が不要の場合
+      }else if(BodyMessage[0].match(/返信.*?(不要|(要|い)りません|する必要は(ありません|ない｜なし)|しないで)/)||strSubject.match(/返信不要/)){
+        var　importance = "新規メールが届きました。";
+		//返信不要用のApp名のトークン
+        var token="YOUR_TOKEN_2";
+        var notice="※通知の返信不要は誤検出の可能性もあります。あくまで目安としてお使いください。返信に関して指定があれば、指定に従ってください。";
+      }else{
+        var　importance = "新規メールが届きました。";
+		//至急確認用のApp名のトークン
+        var token="YOUR_TOKEN_3";
+        var notice="※メール本文に返信についての記載を見つけることができませんでした。返信に関して指定があれば、指定に従ってください。";
+      }
+        
+    //LINEに送信するメッセージを設定
+    var Message=strName+importance+"\n差出人:"+strFrom+"\n受信時刻:"+strDate+"\n件名:"+strSubject+"\n本文:\n\n"+BodyMessage+"\n-----本文ここまで-----\n"+notice+"\n↓mailを開く↓\nURL_OF_YOUR_EMAIL_SERVER";  
+	//URL_OF_YOUR_EMAIL_SERVERにWebメールのURLを記載  
+    
+    //LINEにメッセージを送信する
+    sendLine(Message,token);
+ 
+    //メッセージを既読にする
+    myMessages[i][j].markRead();
+      }
+    }
+  }
+}
+ 
+
+
+function sendLine(Message,strToken){
+   
+  
+  var options =
+   {
+     "method"  : "post",
+     "payload" : "message=" + Message,
+     "headers" : {"Authorization" : "Bearer "+ strToken}
+ 
+   };
+ //Commented to Stop
+   //UrlFetchApp.fetch("https://notify-api.line.me/api/notify",options);
+}
+
+
+//差出人の名前を返す関数
+function getname(from){
+//アドレスを抽出
+  var address　=　from.match(/<[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]*@[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]*>$/);
+  address=address.toString();
+  address=address.replace('<','').replace('>','');
+  
+  Logger.log(address);
+  switch(address){
+      case "example1@example.com":
+      return "名字 名前"
+      break;
+
+    case "example1@example.com":
+      return "特例 で 先生"
+      break;
+	  
+	  
+/////////////////////////////////////
+//
+//				追記方法
+//
+/////////////////////////////////////
+//case "example@example.com":
+//	return "名字 名前"
+//	break;
+/////////////////////////////////////
+
+ヒットしなかった場合
+      default:
+  return "404";
+  }
+}
